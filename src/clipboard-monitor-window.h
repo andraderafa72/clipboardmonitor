@@ -1,3 +1,7 @@
+#ifndef CLIPBOARDMONITOR_H
+#define CLIPBOARDMONITOR_H
+
+#include <QShortcut>
 #include <QApplication>
 #include <QClipboard>
 #include <QMessageBox>
@@ -10,6 +14,12 @@
 #include <QTextStream>
 #include <QString>
 #include <QScreen>
+#include <QIcon>
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include <QCloseEvent>
+#include <QEvent>
+#include <QHideEvent>
 #include <string>
 #include <fstream>
 
@@ -23,6 +33,8 @@ public:
     explicit ClipboardMonitor(QWidget *parent = nullptr);
     virtual ~ClipboardMonitor();
 
+    void show_window();
+    void hide_window();
 private slots:
     void on_item_clicked(QListWidgetItem *item);
     void on_clipboard_changed();
@@ -31,6 +43,7 @@ private slots:
 
 private:
     QString m_filepath;
+    QString m_icon_path = QApplication::applicationDirPath() + "/icon.svg";
     QString m_text_clicked;
 
     void save_clipboard_history(const QString &newText = QString());
@@ -44,5 +57,22 @@ private:
     QClipboard *clipboard;
     QVBoxLayout *layout;
     QListWidget *listWidget;
+    QSystemTrayIcon *trayIcon;
+
+protected:
+    void closeEvent(QCloseEvent *event) override {
+        event->ignore();
+        this->hide();
+    }
+    void changeEvent(QEvent *event) override
+    {
+        if (event->type() == QEvent::ActivationChange && !isActiveWindow()) {
+            event->ignore();
+            this->hide();
+        } else {
+            QWidget::changeEvent(event);
+        }
+    }
 };
 
+#endif

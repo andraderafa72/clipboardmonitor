@@ -12,6 +12,11 @@ ClipboardMonitor::ClipboardMonitor(QWidget *parent){
     m_filepath = QString(path.c_str());
     
     setWindowTitle("Clipboard Monitor");
+
+setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowTitleHint);
+setProperty("_NET_WM_WINDOW_TYPE", QVariant("_NET_WM_WINDOW_TYPE_NORMAL"));
+setProperty("_NET_WM_STATE", QVariant::fromValue(QVariantList() << "_NET_WM_STATE_ABOVE"));
+
     resize(400, 300);
 
     // Layout
@@ -29,8 +34,35 @@ ClipboardMonitor::ClipboardMonitor(QWidget *parent){
     clipboard = QApplication::clipboard();
     connect(clipboard, &QClipboard::dataChanged, this, &ClipboardMonitor::on_clipboard_changed);
 
+    // Shortcuts
+    QShortcut *closeShortcut = new QShortcut(QKeySequence("Esc"), this);
+    connect(closeShortcut, &QShortcut::activated, this, &ClipboardMonitor::hide_window);
+
+    // Icone da bandeja
+    trayIcon = new QSystemTrayIcon();
+    QIcon trayIconImage(m_icon_path);
+    if (!trayIconImage.isNull()) {
+        trayIcon->setIcon(trayIconImage);  // Definindo o ícone
+    } else {
+        qWarning("Ícone não encontrado ou o caminho está incorreto.");
+    }
+
+    trayIcon->setIcon(trayIconImage);
+    trayIcon->show();
+
+    QMenu *trayMenu = new QMenu(this);
+    QAction *showAction = new QAction("Mostrar Janela", this);
+    QAction *exitAction = new QAction("Sair", this);
+    trayMenu->addAction(showAction);
+    trayMenu->addAction(exitAction);
+    trayIcon->  setContextMenu(trayMenu);
+
+    connect(showAction, &QAction::triggered, this, &ClipboardMonitor::show_window);
+    connect(exitAction, &QAction::triggered, qApp, &QApplication::quit);
+
     // Carregar histórico de clipboard
     load_clipboard_history();
+    show_window();
 }
 
 void ClipboardMonitor::create_clear_button(){
@@ -58,10 +90,20 @@ void ClipboardMonitor::on_item_clicked(QListWidgetItem *item) {
     QMessageBox::information(this, "Texto Copiado", "Texto copiado para a área de transferência!");
 }
 
+void ClipboardMonitor::show_window(){
+    this->show();
+    center_window();    
+    this->raise();  // Coloca a janela no topo
+    this->activateWindow();  // Torna a janela ativa
+}
+void ClipboardMonitor::hide_window(){
+    this->hide();
+}
+
 void ClipboardMonitor::on_clipboard_changed() {
     QString text = clipboard->text();
     if (!text.isEmpty() && m_text_clicked != text) {
-        listWidget->addItem(text);
+        listWidget->insertItem(0, text);
         // Salvar no histórico
         save_clipboard_history(text);
     }
@@ -83,6 +125,7 @@ void ClipboardMonitor::load_clipboard_history() {
     QFile file(m_filepath);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream in(&file);
+        
         while (!in.atEnd()) {
             QString line = in.readLine();
             QString result;
@@ -103,7 +146,7 @@ void ClipboardMonitor::load_clipboard_history() {
                 }
             }
 
-            listWidget->addItem(result);
+            listWidget->insertItem(0, result);
         }
     }
 }
