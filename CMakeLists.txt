@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Nome do projeto
-project(ClipboardMonitor VERSION 1.0 LANGUAGES CXX)
+project(clipboardmonitor VERSION 1.0 LANGUAGES CXX)
 
 # Configurações de compilação
 set(CMAKE_CXX_STANDARD 17)
