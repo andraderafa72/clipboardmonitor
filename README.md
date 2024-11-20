@@ -18,7 +18,7 @@ Requisitos:
 - [cmake](https://cmake.org/)
 - [git](https://git-scm.com/)
 
-### Etapas de compilação
+### Etapas da compilação
 1. Clone o repositório:
 ```bash
 git clone https://github.com/andraderafa72/clipboardmonitor
@@ -26,9 +26,18 @@ git clone https://github.com/andraderafa72/clipboardmonitor
 
 2. Acesse o repositório clonado e faça a build:
 
+#### Executando `build.sh`:
+```bash
+chamod +x ./build.sh # se necessário
+./build.sh
+```
+
+#### Compilando manualmente
+
 ```bash
 cmake -S . -B build
-cmake --build dist
+cmake --build build
+mv build/clipboardmonitor dist/
 ```
 
 3. Execute a aplicação:
