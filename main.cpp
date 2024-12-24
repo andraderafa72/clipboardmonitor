@@ -1,5 +1,8 @@
 #include <QApplication>
 #include <QObject>
+#include <QString>
+#include <QLockFile> 
+#include <QDir>
 #include <string>
 #include "src/keyboard-monitor.h"
 #include "src/clipboard-monitor-window.h"
@@ -23,6 +26,19 @@ std::vector<std::pair<int, unsigned int>> get_keys_to_monitor(ClipboardMonitor &
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
+
+    // Diretório para o arquivo de bloqueio
+    QString lockFilePath = QDir::temp().absoluteFilePath("clipboard-monitor.lock");
+    QLockFile lockFile(lockFilePath);
+
+    // Configura o tempo limite para evitar bloqueios travados
+    lockFile.setStaleLockTime(30000); // 30 segundos
+
+    // Tenta obter o bloqueio
+    if (!lockFile.tryLock()) {
+        qDebug() << "Outra instância já está rodando.";
+        return 1; // Sai se já existir uma instância
+    }
 
     ClipboardMonitor monitor;
     KeyListener keyListener;

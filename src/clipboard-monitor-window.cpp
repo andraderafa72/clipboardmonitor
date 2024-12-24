@@ -62,7 +62,7 @@ ClipboardMonitor::ClipboardMonitor(QWidget *parent){
 
     // Carregar histórico de clipboard
     load_clipboard_history();
-    show_window();
+    // show_window(); // Janela aparece somente ao clicar em Super+V
 }
 
 void ClipboardMonitor::create_clear_button(){
@@ -96,6 +96,7 @@ void ClipboardMonitor::show_window(){
     this->raise();  // Coloca a janela no topo
     this->activateWindow();  // Torna a janela ativa
 }
+
 void ClipboardMonitor::hide_window(){
     this->hide();
 }
