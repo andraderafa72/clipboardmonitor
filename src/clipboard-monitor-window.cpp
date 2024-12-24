@@ -13,9 +13,9 @@ ClipboardMonitor::ClipboardMonitor(QWidget *parent){
     
     setWindowTitle("Clipboard Monitor");
 
-setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowTitleHint);
-setProperty("_NET_WM_WINDOW_TYPE", QVariant("_NET_WM_WINDOW_TYPE_NORMAL"));
-setProperty("_NET_WM_STATE", QVariant::fromValue(QVariantList() << "_NET_WM_STATE_ABOVE"));
+    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowTitleHint);
+    setProperty("_NET_WM_WINDOW_TYPE", QVariant("_NET_WM_WINDOW_TYPE_NORMAL"));
+    setProperty("_NET_WM_STATE", QVariant::fromValue(QVariantList() << "_NET_WM_STATE_ABOVE"));
 
     resize(400, 300);
 
@@ -102,9 +102,9 @@ void ClipboardMonitor::hide_window(){
 
 void ClipboardMonitor::on_clipboard_changed() {
     QString text = clipboard->text();
-    if (!text.isEmpty() && m_text_clicked != text) {
+    if (!text.isEmpty() && m_last_copied_text != text && m_text_clicked != text) {
+        m_last_copied_text = text;
         listWidget->insertItem(0, text);
-        // Salvar no histórico
         save_clipboard_history(text);
     }
 }
@@ -125,7 +125,8 @@ void ClipboardMonitor::load_clipboard_history() {
     QFile file(m_filepath);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream in(&file);
-        
+        // std::vector<QString> lines;
+
         while (!in.atEnd()) {
             QString line = in.readLine();
             QString result;
@@ -145,9 +146,16 @@ void ClipboardMonitor::load_clipboard_history() {
                     result.append(line);
                 }
             }
-
+            // lines.push_back(result);
             listWidget->insertItem(0, result);
         }
+
+        // std::reverse(lines.begin(), lines.end());
+        // auto ptr = lines.begin(), end = lines.end();
+        // while(ptr != end){
+        //     listWidget->addItem(*ptr);
+        //     ++ptr;
+        // }
     }
 }
 

@@ -45,6 +45,7 @@ private:
     QString m_filepath;
     QString m_icon_path = QApplication::applicationDirPath() + "/icon.svg";
     QString m_text_clicked;
+    QString m_last_copied_text;
 
     void save_clipboard_history(const QString &newText = QString());
     void load_clipboard_history();
