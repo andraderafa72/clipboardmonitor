@@ -5,6 +5,8 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QLineEdit>
+#include <QKeySequence>
 #include <QScreen>
 #include <QShortcut>
 #include <QSize>
@@ -27,6 +29,12 @@ ClipboardMonitor::ClipboardMonitor(QWidget* parent)
     layout = new QVBoxLayout(this);
     center_window();
 
+    m_searchEdit = new QLineEdit(this);
+    m_searchEdit->setPlaceholderText(QStringLiteral("Buscar…"));
+    m_searchEdit->setClearButtonEnabled(true);
+    layout->addWidget(m_searchEdit);
+    connect(m_searchEdit, &QLineEdit::textChanged, this, &ClipboardMonitor::rebuildListWidget);
+
     listWidget = new QListWidget(this);
     listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     listWidget->viewport()->installEventFilter(this);
@@ -41,6 +49,14 @@ ClipboardMonitor::ClipboardMonitor(QWidget* parent)
 
     auto* closeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
     connect(closeShortcut, &QShortcut::activated, this, &ClipboardMonitor::hide_window);
+
+    auto* findShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), this);
+    connect(findShortcut, &QShortcut::activated, this, [this]() {
+        if (m_searchEdit != nullptr) {
+            m_searchEdit->setFocus();
+            m_searchEdit->selectAll();
+        }
+    });
 
     trayIcon = new QSystemTrayIcon(this);
     QIcon trayIconImage(QStringLiteral(":/icons/clipboard-monitor.svg"));
@@ -79,7 +95,19 @@ void ClipboardMonitor::persistModelToDisk()
 void ClipboardMonitor::rebuildListWidget()
 {
     listWidget->clear();
-    const QVector<QPair<QString, bool>> rows = m_model.buildRenderVector();
+    QVector<QPair<QString, bool>> rows = m_model.buildRenderVector();
+    const QString needle =
+        m_searchEdit != nullptr ? m_searchEdit->text().trimmed() : QString();
+    if (!needle.isEmpty()) {
+        QVector<QPair<QString, bool>> filtered;
+        filtered.reserve(rows.size());
+        for (const auto& pr : rows) {
+            if (pr.first.contains(needle, Qt::CaseInsensitive)) {
+                filtered.append(pr);
+            }
+        }
+        rows = std::move(filtered);
+    }
     for (const auto& pr : rows) {
         QListWidgetItem* it = createListItem(pr.first, pr.second);
         listWidget->addItem(it);
@@ -287,6 +315,10 @@ void ClipboardMonitor::show_window()
     center_window();
     raise();
     activateWindow();
+    if (m_searchEdit != nullptr) {
+        m_searchEdit->setFocus();
+        m_searchEdit->selectAll();
+    }
 }
 
 void ClipboardMonitor::hide_window()

@@ -10,6 +10,7 @@
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QListWidget>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QCloseEvent>
 #include <QEvent>
@@ -62,6 +63,7 @@ private:
 
     QClipboard* clipboard = nullptr;
     QVBoxLayout* layout = nullptr;
+    QLineEdit* m_searchEdit = nullptr;
     QListWidget* listWidget = nullptr;
     QSystemTrayIcon* trayIcon = nullptr;
 
