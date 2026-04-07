@@ -11,14 +11,16 @@ public:
     ClipboardHistoryStore();
 
     [[nodiscard]] QString path() const { return m_path; }
+    [[nodiscard]] QString pinsPath() const { return m_pinsPath; }
 
     [[nodiscard]] QStringList loadNewestFirst() const;
-    void append(const QString& text);
-    void clear();
+    [[nodiscard]] QStringList loadPinsNewestFirst() const;
     void rewriteFromNewestFirst(const QStringList& itemsNewestFirst);
+    void rewritePinsNewestFirst(const QStringList& itemsNewestFirst);
 
 private:
     QString m_path;
+    QString m_pinsPath;
 
     static QString defaultHistoryPath();
 };

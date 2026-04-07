@@ -6,11 +6,6 @@
 #include "clipboard-monitor-window.h"
 #include "keyboard-monitor.h"
 
-#include <exception>
-#include <string>
-#include <utility>
-#include <vector>
-
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
@@ -34,19 +29,12 @@ int main(int argc, char* argv[])
     ClipboardMonitor monitor;
     KeyListener keyListener;
 
-    try {
-        const std::vector<std::pair<int, unsigned int>> keys = superVHotkeys();
-        if (!keyListener.start(keys)) {
-            return 1;
-        }
-
-        QObject::connect(&keyListener, &KeyListener::keyPressed, &monitor, [&monitor](int /*keycode*/) {
-            monitor.show_window();
-        });
-    } catch (const std::exception& ex) {
-        qCritical("%s", ex.what());
+    if (!keyListener.startSuperVGrab()) {
         return 1;
     }
+
+    QObject::connect(&keyListener, &KeyListener::superVHotkeyPressed, &monitor,
+                     &ClipboardMonitor::show_window);
 
     return app.exec();
 }
