@@ -1,6 +1,8 @@
 #ifndef CLIPBOARDMONITOR_H
 #define CLIPBOARDMONITOR_H
 
+#include "clipboard-history-store.h"
+
 #include <QShortcut>
 #include <QApplication>
 #include <QClipboard>
@@ -9,71 +11,46 @@
 #include <QVBoxLayout>
 #include <QListWidget>
 #include <QPushButton>
-#include <QLabel>
-#include <QFile>
-#include <QTextStream>
-#include <QString>
-#include <QScreen>
-#include <QIcon>
-#include <QSystemTrayIcon>
-#include <QMenu>
 #include <QCloseEvent>
 #include <QEvent>
-#include <QHideEvent>
-#include <string>
-#include <fstream>
-
-const QString CLIPBOARD_START_DELIMITOR = "@CS$#";
-const QString CLIPBOARD_END_DELIMITOR = "@CE$#";
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include <QString>
 
 class ClipboardMonitor : public QWidget {
     Q_OBJECT
 
 public:
-    explicit ClipboardMonitor(QWidget *parent = nullptr);
-    virtual ~ClipboardMonitor();
+    explicit ClipboardMonitor(QWidget* parent = nullptr);
+    ~ClipboardMonitor() override;
 
     void show_window();
     void hide_window();
-private slots:
-    void on_item_clicked(QListWidgetItem *item);
-    void on_clipboard_changed();
 
+private slots:
+    void on_item_clicked(QListWidgetItem* item);
+    void on_clipboard_changed();
     void clear_list();
 
 private:
-    QString m_filepath;
-    QString m_icon_path = QApplication::applicationDirPath() + "/icon.svg";
-    QString m_text_clicked;
-    QString m_last_copied_text;
-
-    void save_clipboard_history(const QString &newText = QString());
-    void load_clipboard_history();
-    void clear_clipboard_history();
+    void trimListToMaxAndSyncFile();
+    QStringList listTextsNewestFirst() const;
 
     void center_window();
     void create_clear_button();
-    
-private:
-    QClipboard *clipboard;
-    QVBoxLayout *layout;
-    QListWidget *listWidget;
-    QSystemTrayIcon *trayIcon;
+
+    ClipboardHistoryStore m_history;
+    QString m_text_clicked;
+    QString m_last_copied_text;
+
+    QClipboard* clipboard = nullptr;
+    QVBoxLayout* layout = nullptr;
+    QListWidget* listWidget = nullptr;
+    QSystemTrayIcon* trayIcon = nullptr;
 
 protected:
-    void closeEvent(QCloseEvent *event) override {
-        event->ignore();
-        this->hide();
-    }
-    void changeEvent(QEvent *event) override
-    {
-        if (event->type() == QEvent::ActivationChange && !isActiveWindow()) {
-            event->ignore();
-            this->hide();
-        } else {
-            QWidget::changeEvent(event);
-        }
-    }
+    void closeEvent(QCloseEvent* event) override;
+    void changeEvent(QEvent* event) override;
 };
 
 #endif

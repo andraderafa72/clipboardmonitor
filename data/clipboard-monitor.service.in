@@ -1,0 +1,13 @@
+[Unit]
+Description=Clipboard Monitor (histórico da área de transferência)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/clipboardmonitor
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

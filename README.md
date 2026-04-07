@@ -1,99 +1,94 @@
 # Clipboard Monitor
 
-O **Clipboard Monitor** é uma aplicação que registra todas as entradas copiadas ou cortadas pelo usuário, funcionando de maneira similar à ferramenta de histórico de área de transferência do Windows ao pressionar `Win + V`. A aplicação permite ao usuário visualizar e acessar os itens copiados anteriormente através de uma janela que é exibida ao pressionar `Super + V`.
+O **Clipboard Monitor** registra entradas de **texto** copiadas ou cortadas e mantém um histórico, de forma parecida ao atalho `Win + V` do Windows. Ao pressionar **Super + V**, a janela lista os trechos recentes para colar de novo.
+
+## Limitações
+
+- **Sessão X11**: o atalho global usa `XGrabKey`. Em **Wayland** puro o grab não se comporta igual; use sessão X11 ou XWayland conforme seu ambiente.
+- **Somente texto**: o histórico usa `QClipboard::text()` (sem imagens ou rich text).
 
 ## Funcionalidades
 
-- **Registro de Clipboard**: A aplicação monitora tudo o que o usuário copia ou corta (texto, imagens, etc.) e mantém um histórico dessas entradas.
-- **Exibição de Histórico**: Ao pressionar `Super + V`, a aplicação exibe uma janela com todos os registros copiados, permitindo que o usuário escolha o item desejado.
-- **Integração com X11**: Utiliza a API do X11 para capturar eventos do teclado e interagir com a área de transferência.
+- Histórico de clipboard em texto, persistido em `~/.local/share/clipboardmonitor/history.txt` (XDG).
+- Até **500** entradas; entradas mais antigas saem da lista e do ficheiro quando o limite é ultrapassado.
+- Bandeja do sistema com ícone embutido (fallback se o tema não tiver ícone instalado).
+- Uma instância por utilizador (ficheiro de lock em `XDG_RUNTIME_DIR` ou diretório temporário).
 
 ## Tecnologias
 
-- **Qt6**: Framework utilizado para construir a interface gráfica e lidar com eventos.
-- **X11 API**: Para captura de eventos de teclado (como `Super + V`) e monitoramento da área de transferência.
+- **Qt6** (Widgets)
+- **X11** para o atalho **Super + V**
 
 ## Compilação
-Requisitos:
-- [cmake](https://cmake.org/)
-- [git](https://git-scm.com/)
 
-### Etapas da compilação
-1. Clone o repositório:
+Requisitos: CMake, Qt6 (Widgets), libX11, compilador C++17.
+
+### `build.sh`
+
 ```bash
-git clone https://github.com/andraderafa72/clipboardmonitor
-```
-
-2. Acesse o repositório clonado e faça a build:
-
-#### Executando `build.sh`:
-```bash
-chamod +x ./build.sh # se necessário
+chmod +x ./build.sh   # se necessário
 ./build.sh
 ```
 
-#### Compilando manualmente
+### Manual
 
 ```bash
 cmake -S . -B build
 cmake --build build
-mv build/clipboardmonitor dist/
 ```
 
-3. Execute a aplicação:
-```bash
-./dist/clipboardmonitor
-```
+O executável fica em `build/clipboardmonitor`. Opcionalmente copie para `dist/` como antes.
 
-## Adicionando como um serviço no linux
-
-### Crie o arquivo de serviço:
- 
-```bash
-sudo nano /etc/systemd/system/clipboardmonitor.service
-```
-
-### Adicione o seguinte conteúdo:
-
-```ini
-[Unit]
-Description=Clipboard Monitor
-After=graphical.target
-
-[Service]
-ExecStart=/caminho/para/o/executavel/dist/clipboardmonitor
-Restart=always
-User=seu_usuario
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/seu_usuario/.Xauthority
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Habilite a aplicação como serviço:
- 
-```bash
-sudo systemctl enable clipboardmonitor.service
-sudo systemctl start clipboardmonitor.service
-```
-
-#### Verifique se o serviço está habilitado:
+### Instalação (prefixo configurável)
 
 ```bash
-sudo systemctl status clipboardmonitor.service
+cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr/local
+cmake --build build
+cmake --install build
 ```
+
+Isto instala o binário, o ícone em `share/icons/hicolor/scalable/apps/clipboard-monitor.svg`, o `.desktop` em `share/applications` e uma unidade **systemd user** gerada com o caminho `ExecStart` correto em `lib/systemd/user/clipboard-monitor.service`.
+
+## Autostart
+
+### Entrada `.desktop` (recomendado em muitos ambientes)
+
+Após `cmake --install`, copie ou faça ligação simbólica:
+
+```bash
+ln -sf /usr/local/share/applications/clipboard-monitor.desktop ~/.config/autostart/
+```
+
+(Ajuste o prefixo se não for `/usr/local`.)
+
+O repositório inclui o modelo em [data/clipboard-monitor.desktop](data/clipboard-monitor.desktop) (`Exec=clipboardmonitor` — o binário deve estar no `PATH` ou edite o `Exec` com caminho completo).
+
+### systemd (utilizador)
+
+O `ExecStart` no ficheiro gerado corresponde ao prefixo do CMake (`-DCMAKE_INSTALL_PREFIX`). Copie a unidade para `~/.config/systemd/user/` e active:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp build/clipboard-monitor.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now clipboard-monitor.service
+```
+
+Depois de `cmake --install`, pode copiar de `lib/systemd/user/clipboard-monitor.service` sob o prefixo em vez da cópia em `build/`, se o systemd listar esse diretório; caso contrário mantenha `~/.config/systemd/user/`.
+
+**Não** é recomendado um serviço **system** com `User=` e `DISPLAY=:0` fixo: corre o risco de arrancar antes do X11 e exige variáveis da sessão. Prefira **systemd --user** ou autostart da sessão gráfica.
+
+### `QT_QPA_PLATFORM`
+
+Se necessário forçar o backend X11 num ambiente misto: `export QT_QPA_PLATFORM=xcb` antes do `Exec` (opcional, documente no vosso `.desktop` personalizado).
 
 ## Contribuições
-Se você gostaria de contribuir para o desenvolvimento dessa aplicação, sinta-se à vontade para fazer um fork e enviar um pull request.
 
-----
-
-A aplicação foi projetada para ser leve e fácil de usar, integrando-se de forma fluida com o sistema operacional. Ela monitora a área de transferência e captura eventos de teclado com a ajuda do Qt6 e da API X11, permitindo uma experiência de usuário mais produtiva.
+Sinta-se à vontade para fazer fork e enviar pull requests.
 
 ## Implementações futuras
 
-- Fixar itens copiados;
-- Remover um único item copiado;
-- Previsualizar imagens copiadas;
-- Buscar textos copiados;
+- Fixar itens no histórico;
+- Remover um único item;
+- Pré-visualização de imagens (requer mudar o modelo de dados);
+- Pesquisa no histórico;

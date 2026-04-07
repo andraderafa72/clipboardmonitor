@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Clipboard Monitor
+Comment=Histórico da área de transferência (atalho Super+V)
+Icon=clipboard-monitor
+Exec=clipboardmonitor
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+X-GNOME-Autostart-Delay=2
