@@ -4,7 +4,7 @@ Plain-text clipboard history (like **Win + V**). **Super + V** opens recent snip
 
 **Limits:** **X11** global hotkey (`XGrabKey`); **pure Wayland** may not get **Super + V**. History is **text only** (`QClipboard::text()`).
 
-**Features:** Up to **500** entries, XDG store at `~/.local/share/clipboardmonitor/history.txt`, tray icon, single instance per user.
+**Features:** Up to **500** entries, XDG store at `~/.local/share/clipboardmonitor/history.txt`, tray icon, single instance per user, search filter (substring, case-insensitive; **Ctrl+F** focuses the field).
 
 **Stack:** Qt6 Widgets, X11.
 
@@ -52,4 +52,4 @@ Pull requests welcome.
 
 ## Future work
 
-Pin/remove entries, image preview, search.
+Pin/remove entries, image preview.
