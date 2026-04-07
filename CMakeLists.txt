@@ -5,7 +5,7 @@ project(clipboardmonitor VERSION 1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent)
 find_package(X11 REQUIRED)
 
 include(GNUInstallDirs)
@@ -30,7 +30,8 @@ set(CMAKE_AUTORCC ON)
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${MOC_HEADERS} resources.qrc)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets X11)
+target_link_libraries(${PROJECT_NAME}
+                      PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent X11)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 

@@ -110,8 +110,11 @@ void ClipboardHistoryModel::removeEntry(const QString& text)
     trimPins();
 }
 
-void ClipboardHistoryModel::clearHistory()
+void ClipboardHistoryModel::clearHistory(ClipboardHistoryStore& store)
 {
+    for (const QString& t : m_hist) {
+        store.removeMediaForEntryIfImage(t);
+    }
     m_hist.clear();
 }
 

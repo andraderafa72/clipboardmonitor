@@ -7,6 +7,7 @@
 #include <QStringList>
 #include <QVector>
 
+/** History entries are QString blocks: plain text, or image refs from ClipboardHistoryStore::saveImageForHistory. */
 class ClipboardHistoryModel {
 public:
     static constexpr int kMaxPinnedEntries = 100;
@@ -24,7 +25,8 @@ public:
 
     void togglePin(const QString& text);
     void removeEntry(const QString& text);
-    void clearHistory();
+    /** Removes non-pinned history entries and deletes on-disk image files for image blocks. */
+    void clearHistory(ClipboardHistoryStore& store);
 
 private:
     void trimHistory();
