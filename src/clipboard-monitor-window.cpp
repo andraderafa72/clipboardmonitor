@@ -1,22 +1,76 @@
 #include "clipboard-monitor-window.h"
 
 #include <QAction>
+#include <QFile>
 #include <QFontMetrics>
+#include <QFutureWatcher>
+#include <QClipboard>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QImage>
+#include <QImageReader>
+#include <QLabel>
 #include <QLineEdit>
 #include <QKeySequence>
+#include <QMimeData>
+#include <QPointer>
 #include <QScreen>
 #include <QShortcut>
 #include <QSize>
 #include <QTimer>
 #include <QToolButton>
+#include <QtConcurrent>
 #include <QVariant>
+
+namespace {
+
+[[nodiscard]] QImage imageFromClipboard(QClipboard* clip, const QMimeData* mime)
+{
+    if (clip == nullptr || mime == nullptr || !mime->hasImage()) {
+        return {};
+    }
+    const QVariant imageVar = mime->imageData();
+    QImage img = qvariant_cast<QImage>(imageVar);
+    if (img.isNull()) {
+        const QPixmap pm = qvariant_cast<QPixmap>(imageVar);
+        if (!pm.isNull()) {
+            img = pm.toImage();
+        }
+    }
+    if (img.isNull()) {
+        img = clip->image();
+    }
+    return img;
+}
+
+[[nodiscard]] QPixmap loadThumbnailPixmap(const QString& thumbPath, const QString& pngPath)
+{
+    QPixmap pix;
+    if (QFile::exists(thumbPath) && pix.load(thumbPath)) {
+        return pix;
+    }
+    QImageReader reader(pngPath);
+    if (!reader.canRead()) {
+        return {};
+    }
+    reader.setScaledSize(
+        QSize(ClipboardHistoryStore::kThumbMaxEdgePx, ClipboardHistoryStore::kThumbMaxEdgePx));
+    const QImage img = reader.read();
+    if (img.isNull()) {
+        return {};
+    }
+    return QPixmap::fromImage(img);
+}
+
+} // namespace
 
 ClipboardMonitor::ClipboardMonitor(QWidget* parent)
     : QWidget(parent)
 {
+    m_thumbThreadPool.setMaxThreadCount(3);
+    m_thumbCache.setMaxCost(kThumbCacheMaxEntries);
+
     setWindowTitle(QStringLiteral("Clipboard Monitor"));
 
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowTitleHint);
@@ -124,6 +178,7 @@ void ClipboardMonitor::togglePinForText(const QString& text)
 
 void ClipboardMonitor::removeText(const QString& text)
 {
+    m_store.removeMediaForEntryIfImage(text);
     m_model.removeEntry(text);
     persistModelToDisk();
     rebuildListWidget();
@@ -153,11 +208,42 @@ void ClipboardMonitor::copyItemTextToClipboard(QListWidgetItem* item)
 {
     const QString t = clipText(item);
     m_text_clicked = t;
+    if (ClipboardHistoryStore::entryBlockIsImage(t)) {
+        QString hash;
+        if (m_store.parseImageEntry(t, &hash, nullptr)) {
+            const QImage img(m_store.imageFilePath(hash));
+            if (!img.isNull()) {
+                QApplication::clipboard()->setImage(img);
+                showTrayCopyFeedback(
+                    QStringLiteral("Imagem copiada para a área de transferência."));
+                return;
+            }
+        }
+    }
     QApplication::clipboard()->setText(t);
+    showTrayCopyFeedback(QStringLiteral("Texto copiado para a área de transferência."));
+}
+
+void ClipboardMonitor::applyClipboardEntryToModelAndRefresh(const QString& entry)
+{
+    QString newLast = m_last_copied_text;
+    const ClipboardHistoryModel::ClipboardApplyResult r =
+        m_model.applyNewClipboardText(entry, m_last_copied_text, m_text_clicked, newLast);
+    if (r == ClipboardHistoryModel::ClipboardApplyResult::NoOp) {
+        return;
+    }
+    m_last_copied_text = newLast;
+    persistModelToDisk();
+    rebuildListWidget();
+}
+
+void ClipboardMonitor::showTrayCopyFeedback(const QString& message)
+{
     if (trayIcon != nullptr && trayIcon->isVisible()) {
         trayIcon->showMessage(QStringLiteral("Clipboard Monitor"),
-                              QStringLiteral("Texto copiado para a área de transferência."),
-                              QSystemTrayIcon::MessageIcon::Information, 2500);
+                              message,
+                              QSystemTrayIcon::MessageIcon::Information,
+                              2500);
     }
 }
 
@@ -175,11 +261,26 @@ QListWidgetItem* ClipboardMonitor::createListItem(const QString& text, bool pinn
 void ClipboardMonitor::attachItemRowWidget(QListWidgetItem* item)
 {
     const QString rowText = item->data(kRoleClipText).toString();
+    const bool isImage = ClipboardHistoryStore::entryBlockIsImage(rowText);
 
     auto* row = new QWidget(listWidget);
     auto* h = new QHBoxLayout(row);
     h->setContentsMargins(4, 2, 4, 2);
     h->setSpacing(6);
+
+    if (isImage) {
+        auto* thumbLabel = new QLabel(row);
+        thumbLabel->setObjectName(QStringLiteral("clipboardThumbLabel"));
+        thumbLabel->setFixedSize(kThumbLabelPx, kThumbLabelPx);
+        thumbLabel->setAlignment(Qt::AlignCenter);
+        thumbLabel->setStyleSheet(
+            QStringLiteral("QLabel { background-color: palette(mid); border-radius: 4px; }"));
+        QString hash;
+        if (m_store.parseImageEntry(rowText, &hash, nullptr)) {
+            scheduleRowThumbLoad(thumbLabel, hash);
+        }
+        h->addWidget(thumbLabel, 0, Qt::AlignVCenter);
+    }
 
     auto* textBtn = new QPushButton(row);
     textBtn->setObjectName(QStringLiteral("clipboardTextButton"));
@@ -216,6 +317,52 @@ void ClipboardMonitor::attachItemRowWidget(QListWidgetItem* item)
 
     listWidget->setItemWidget(item, row);
     updateRowTextElision(item);
+
+    const int rowH = isImage ? qMax(40, kThumbLabelPx + 12) : 40;
+    item->setSizeHint(QSize(0, rowH));
+}
+
+void ClipboardMonitor::scheduleRowThumbLoad(QLabel* thumbLabel, const QString& hashHex)
+{
+    if (thumbLabel == nullptr || hashHex.isEmpty()) {
+        return;
+    }
+
+    if (QPixmap* cached = m_thumbCache.object(hashHex)) {
+        const QPixmap scaled =
+            cached->scaled(kThumbLabelPx,
+                           kThumbLabelPx,
+                           Qt::KeepAspectRatio,
+                           Qt::SmoothTransformation);
+        thumbLabel->setPixmap(scaled);
+        return;
+    }
+
+    const QString thumbPath = m_store.thumbFilePath(hashHex);
+    const QString pngPath = m_store.imageFilePath(hashHex);
+
+    auto* watcher = new QFutureWatcher<QPixmap>(this);
+    QPointer<QLabel> safeThumb(thumbLabel);
+    QObject::connect(watcher, &QFutureWatcher<QPixmap>::finished, this, [this, safeThumb, hashHex, watcher]() {
+        const QPixmap result = watcher->future().result();
+        watcher->deleteLater();
+        if (safeThumb == nullptr) {
+            return;
+        }
+        if (!result.isNull()) {
+            m_thumbCache.insert(hashHex, new QPixmap(result), 1);
+            const QPixmap scaled =
+                result.scaled(kThumbLabelPx,
+                              kThumbLabelPx,
+                              Qt::KeepAspectRatio,
+                              Qt::SmoothTransformation);
+            safeThumb->setPixmap(scaled);
+        }
+    });
+
+    QFuture<QPixmap> future = QtConcurrent::run(
+        &m_thumbThreadPool, [thumbPath, pngPath]() { return loadThumbnailPixmap(thumbPath, pngPath); });
+    watcher->setFuture(future);
 }
 
 void ClipboardMonitor::updateRowTextElision(QListWidgetItem* item)
@@ -233,12 +380,34 @@ void ClipboardMonitor::updateRowTextElision(QListWidgetItem* item)
         return;
     }
     const QString full = clipText(item);
+    if (ClipboardHistoryStore::entryBlockIsImage(full)) {
+        QSize sz;
+        QString imageHash;
+        if (!ClipboardHistoryStore::parseImageEntry(full, &imageHash, &sz)) {
+            sz = QSize();
+        }
+        QString label = ClipboardHistoryStore::imageSearchTag();
+        if (sz.isValid()) {
+            label += QLatin1String(" (") + QString::number(sz.width())
+                + QStringLiteral("\u00d7") + QString::number(sz.height()) + QLatin1Char(')');
+        }
+        textBtn->setText(label);
+        textBtn->setToolTip(full);
+        return;
+    }
     constexpr int kPinReserve = 40;
+    constexpr int kThumbReserve = kThumbLabelPx + 6;
     int vw = listWidget->viewport()->width();
     if (vw <= 1) {
         vw = listWidget->width();
     }
-    const int w = qMax(64, vw - kPinReserve);
+    int thumbExtra = 0;
+    if (row->findChild<QLabel*>(QStringLiteral("clipboardThumbLabel"),
+                                Qt::FindDirectChildrenOnly)
+        != nullptr) {
+        thumbExtra = kThumbReserve;
+    }
+    const int w = qMax(64, vw - kPinReserve - thumbExtra);
     const QFontMetrics fm(textBtn->font());
     QString elided = fm.elidedText(full, Qt::ElideRight, w);
     if (!full.isEmpty() && elided.isEmpty()) {
@@ -328,21 +497,24 @@ void ClipboardMonitor::hide_window()
 
 void ClipboardMonitor::on_clipboard_changed()
 {
-    const QString text = clipboard->text();
-    QString newLast = m_last_copied_text;
-    const ClipboardHistoryModel::ClipboardApplyResult r =
-        m_model.applyNewClipboardText(text, m_last_copied_text, m_text_clicked, newLast);
-    if (r == ClipboardHistoryModel::ClipboardApplyResult::NoOp) {
-        return;
+    const QMimeData* mime = clipboard->mimeData();
+    if (mime != nullptr && mime->hasImage()) {
+        const QImage img = imageFromClipboard(clipboard, mime);
+        if (!img.isNull()) {
+            const QString block = m_store.saveImageForHistory(img);
+            if (!block.isEmpty()) {
+                applyClipboardEntryToModelAndRefresh(block);
+            }
+            return;
+        }
     }
-    m_last_copied_text = newLast;
-    persistModelToDisk();
-    rebuildListWidget();
+
+    applyClipboardEntryToModelAndRefresh(clipboard->text());
 }
 
 void ClipboardMonitor::clear_list()
 {
-    m_model.clearHistory();
+    m_model.clearHistory(m_store);
     persistModelToDisk();
     rebuildListWidget();
 }

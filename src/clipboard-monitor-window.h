@@ -17,6 +17,11 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <QString>
+#include <QCache>
+#include <QPixmap>
+#include <QThreadPool>
+
+class QLabel;
 
 class ClipboardMonitor : public QWidget {
     Q_OBJECT
@@ -36,6 +41,8 @@ private slots:
 private:
     static constexpr int kRolePinned = Qt::UserRole;
     static constexpr int kRoleClipText = Qt::UserRole + 1;
+    static constexpr int kThumbLabelPx = 48;
+    static constexpr int kThumbCacheMaxEntries = 64;
 
     void reloadModelFromDisk();
     void persistModelToDisk();
@@ -47,8 +54,11 @@ private:
     [[nodiscard]] QString clipText(const QListWidgetItem* item) const;
 
     void copyItemTextToClipboard(QListWidgetItem* item);
+    void applyClipboardEntryToModelAndRefresh(const QString& entry);
+    void showTrayCopyFeedback(const QString& message);
     [[nodiscard]] QListWidgetItem* createListItem(const QString& text, bool pinned);
     void attachItemRowWidget(QListWidgetItem* item);
+    void scheduleRowThumbLoad(QLabel* thumbLabel, const QString& hashHex);
     void updateRowTextElision(QListWidgetItem* item);
     void refreshAllRowElisions();
 
@@ -66,6 +76,8 @@ private:
     QLineEdit* m_searchEdit = nullptr;
     QListWidget* listWidget = nullptr;
     QSystemTrayIcon* trayIcon = nullptr;
+    QCache<QString, QPixmap> m_thumbCache;
+    QThreadPool m_thumbThreadPool;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
