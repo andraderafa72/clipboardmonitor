@@ -18,10 +18,11 @@ public:
     ~KeyListener() override;
 
     bool start(const std::vector<std::pair<int, unsigned int>>& keys);
+    bool startSuperVGrab();
     void stop();
 
 signals:
-    void keyPressed(int keycode);
+    void superVHotkeyPressed();
 
 private:
     void grabKeys();
@@ -34,7 +35,5 @@ private:
     std::atomic<bool> running{false};
     std::vector<std::pair<int, unsigned int>> keysToMonitor;
 };
-
-std::vector<std::pair<int, unsigned int>> superVHotkeys();
 
 #endif // KEYLISTENER_H

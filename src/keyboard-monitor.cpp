@@ -78,7 +78,12 @@ void KeyListener::eventLoop()
             XNextEvent(display, &event);
             if (event.type == KeyPress) {
                 const int keycode = static_cast<int>(event.xkey.keycode);
-                emit keyPressed(keycode);
+                for (const auto& grabbed : keysToMonitor) {
+                    if (grabbed.first != 0 && keycode == grabbed.first) {
+                        emit superVHotkeyPressed();
+                        break;
+                    }
+                }
             }
         }
     }
@@ -120,19 +125,32 @@ void KeyListener::stop()
     }
 }
 
-std::vector<std::pair<int, unsigned int>> superVHotkeys()
+bool KeyListener::startSuperVGrab()
 {
-    Display* dpy = XOpenDisplay(nullptr);
-    if (!dpy) {
-        throw std::runtime_error("Erro: Não foi possível abrir o display X11.");
+    if (display != nullptr) {
+        return false;
     }
 
-    const KeyCode keycodeV = XKeysymToKeycode(dpy, XStringToKeysym("v"));
-    XCloseDisplay(dpy);
+    display = XOpenDisplay(nullptr);
+    if (!display) {
+        qCritical("Erro: Não foi possível abrir o display X11.");
+        return false;
+    }
 
+    const KeyCode keycodeV = XKeysymToKeycode(display, XStringToKeysym("v"));
     if (keycodeV == 0) {
-        throw std::runtime_error("Erro: não foi possível obter keycode da tecla V.");
+        qCritical("Erro: não foi possível obter keycode da tecla V.");
+        XCloseDisplay(display);
+        display = nullptr;
+        return false;
     }
 
-    return {{static_cast<int>(keycodeV), Mod4Mask}};
+    rootWindow = static_cast<unsigned long>(DefaultRootWindow(display));
+    keysToMonitor = {{static_cast<int>(keycodeV), Mod4Mask}};
+    grabKeys();
+    XFlush(display);
+
+    running.store(true, std::memory_order_release);
+    listenerThread = std::thread([this]() { eventLoop(); });
+    return true;
 }

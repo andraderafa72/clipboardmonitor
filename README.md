@@ -1,94 +1,55 @@
 # Clipboard Monitor
 
-O **Clipboard Monitor** registra entradas de **texto** copiadas ou cortadas e mantém um histórico, de forma parecida ao atalho `Win + V` do Windows. Ao pressionar **Super + V**, a janela lista os trechos recentes para colar de novo.
+Plain-text clipboard history (like **Win + V**). **Super + V** opens recent snippets to paste again.
 
-## Limitações
+**Limits:** **X11** global hotkey (`XGrabKey`); **pure Wayland** may not get **Super + V**. History is **text only** (`QClipboard::text()`).
 
-- **Sessão X11**: o atalho global usa `XGrabKey`. Em **Wayland** puro o grab não se comporta igual; use sessão X11 ou XWayland conforme seu ambiente.
-- **Somente texto**: o histórico usa `QClipboard::text()` (sem imagens ou rich text).
+**Features:** Up to **500** entries, XDG store at `~/.local/share/clipboardmonitor/history.txt`, tray icon, single instance per user.
 
-## Funcionalidades
+**Stack:** Qt6 Widgets, X11.
 
-- Histórico de clipboard em texto, persistido em `~/.local/share/clipboardmonitor/history.txt` (XDG).
-- Até **500** entradas; entradas mais antigas saem da lista e do ficheiro quando o limite é ultrapassado.
-- Bandeja do sistema com ícone embutido (fallback se o tema não tiver ícone instalado).
-- Uma instância por utilizador (ficheiro de lock em `XDG_RUNTIME_DIR` ou diretório temporário).
+## Compatibility
 
-## Tecnologias
+| | |
+| --- | --- |
+| **OS** | **Linux** with a graphical session. Not aimed at Windows or macOS. |
+| **Distros** | Any distro that ships **Qt 6** (Widgets), **CMake**, **libX11**, and a **C++17** compiler. Examples you can package against: **Arch**, **Debian**, **Ubuntu**, **Fedora**, **openSUSE**, **Gentoo**; minimal distros like **Alpine** work if you install the same deps and run an **X11** session. |
+| **Session** | **X11** or **XWayland** for the shortcut; session autostart (not a system `systemd` service). |
 
-- **Qt6** (Widgets)
-- **X11** para o atalho **Super + V**
+Package names vary, for example: `qt6-base` / `libx11` (Arch), `qt6-base-dev` `libx11-dev` (Debian/Ubuntu), `qt6-qtbase-devel` `libX11-devel` (Fedora).
 
-## Compilação
+## Build / install
 
-Requisitos: CMake, Qt6 (Widgets), libX11, compilador C++17.
-
-### `build.sh`
+Needs: CMake, Qt6 Widgets, libX11, C++17.
 
 ```bash
-chmod +x ./build.sh   # se necessário
+chmod +x ./build.sh   # optional
 ./build.sh
+# or: cmake -S . -B build && cmake --build build
+# binary: build/clipboardmonitor
 ```
-
-### Manual
-
-```bash
-cmake -S . -B build
-cmake --build build
-```
-
-O executável fica em `build/clipboardmonitor`. Opcionalmente copie para `dist/` como antes.
-
-### Instalação (prefixo configurável)
 
 ```bash
 cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr/local
-cmake --build build
-cmake --install build
+cmake --build build && cmake --install build
 ```
 
-Isto instala o binário, o ícone em `share/icons/hicolor/scalable/apps/clipboard-monitor.svg`, o `.desktop` em `share/applications` e uma unidade **systemd user** gerada com o caminho `ExecStart` correto em `lib/systemd/user/clipboard-monitor.service`.
+Installs the binary, `share/icons/hicolor/scalable/apps/clipboard-monitor.svg`, and `share/applications/clipboard-monitor.desktop`.
 
 ## Autostart
 
-### Entrada `.desktop` (recomendado em muitos ambientes)
-
-Após `cmake --install`, copie ou faça ligação simbólica:
+GUI + X11 must be up: use **`~/.config/autostart/`** (or **Settings → Startup**), not a system service.
 
 ```bash
 ln -sf /usr/local/share/applications/clipboard-monitor.desktop ~/.config/autostart/
 ```
 
-(Ajuste o prefixo se não for `/usr/local`.)
+Template: [data/clipboard-monitor.desktop](data/clipboard-monitor.desktop). Fix **`Exec=`** if the binary is not on `PATH`. On mixed Wayland/X11 stacks you may need `QT_QPA_PLATFORM=xcb` in `Exec=` or a wrapper.
 
-O repositório inclui o modelo em [data/clipboard-monitor.desktop](data/clipboard-monitor.desktop) (`Exec=clipboardmonitor` — o binário deve estar no `PATH` ou edite o `Exec` com caminho completo).
+## Contributing
 
-### systemd (utilizador)
+Pull requests welcome.
 
-O `ExecStart` no ficheiro gerado corresponde ao prefixo do CMake (`-DCMAKE_INSTALL_PREFIX`). Copie a unidade para `~/.config/systemd/user/` e active:
+## Future work
 
-```bash
-mkdir -p ~/.config/systemd/user
-cp build/clipboard-monitor.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now clipboard-monitor.service
-```
-
-Depois de `cmake --install`, pode copiar de `lib/systemd/user/clipboard-monitor.service` sob o prefixo em vez da cópia em `build/`, se o systemd listar esse diretório; caso contrário mantenha `~/.config/systemd/user/`.
-
-**Não** é recomendado um serviço **system** com `User=` e `DISPLAY=:0` fixo: corre o risco de arrancar antes do X11 e exige variáveis da sessão. Prefira **systemd --user** ou autostart da sessão gráfica.
-
-### `QT_QPA_PLATFORM`
-
-Se necessário forçar o backend X11 num ambiente misto: `export QT_QPA_PLATFORM=xcb` antes do `Exec` (opcional, documente no vosso `.desktop` personalizado).
-
-## Contribuições
-
-Sinta-se à vontade para fazer fork e enviar pull requests.
-
-## Implementações futuras
-
-- Fixar itens no histórico;
-- Remover um único item;
-- Pré-visualização de imagens (requer mudar o modelo de dados);
-- Pesquisa no histórico;
+Pin/remove entries, image preview, search.

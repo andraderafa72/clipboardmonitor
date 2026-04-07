@@ -15,6 +15,7 @@ set(SOURCES
     src/clipboard-monitor-window.cpp
     src/keyboard-monitor.cpp
     src/clipboard-history-store.cpp
+    src/clipboard-history-model.cpp
 )
 
 set(HEADERS

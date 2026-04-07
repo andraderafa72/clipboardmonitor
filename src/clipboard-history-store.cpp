@@ -1,7 +1,10 @@
 #include "clipboard-history-store.h"
 
+#include <algorithm>
+
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QStandardPaths>
 #include <QTextStream>
 
@@ -10,28 +13,12 @@ namespace {
 const QString kStart = QStringLiteral("@CS$#");
 const QString kEnd = QStringLiteral("@CE$#");
 
-} // namespace
-
-QString ClipboardHistoryStore::defaultHistoryPath()
+QStringList loadBlocksNewestFirstFromPath(const QString& filePath)
 {
-    const QString base =
-        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    const QString dir = base + QStringLiteral("/clipboardmonitor");
-    QDir().mkpath(dir);
-    return dir + QStringLiteral("/history.txt");
-}
-
-ClipboardHistoryStore::ClipboardHistoryStore()
-    : m_path(defaultHistoryPath())
-{
-}
-
-QStringList ClipboardHistoryStore::loadNewestFirst() const
-{
-    QStringList out;
-    QFile file(m_path);
+    QStringList chronological;
+    QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return out;
+        return {};
     }
 
     QTextStream in(&file);
@@ -55,40 +42,21 @@ QStringList ClipboardHistoryStore::loadNewestFirst() const
             block.append(line);
         }
         if (!block.isEmpty()) {
-            out.prepend(block);
+            chronological.append(block);
         }
     }
 
-    while (out.size() > kMaxEntries) {
-        out.removeLast();
+    std::reverse(chronological.begin(), chronological.end());
+    while (chronological.size() > ClipboardHistoryStore::kMaxEntries) {
+        chronological.removeLast();
     }
-    return out;
+    return chronological;
 }
 
-void ClipboardHistoryStore::append(const QString& text)
+void rewriteNewestFirstToPath(const QString& filePath,
+                              const QStringList& itemsNewestFirst)
 {
-    if (text.isEmpty()) {
-        return;
-    }
-    QFile file(m_path);
-    if (!file.open(QIODevice::Append | QIODevice::Text)) {
-        return;
-    }
-    QTextStream out(&file);
-    out << kStart << QLatin1Char('\n') << text << QLatin1Char('\n') << kEnd << QLatin1Char('\n');
-}
-
-void ClipboardHistoryStore::clear()
-{
-    QFile file(m_path);
-    if (file.exists()) {
-        file.remove();
-    }
-}
-
-void ClipboardHistoryStore::rewriteFromNewestFirst(const QStringList& itemsNewestFirst)
-{
-    QFile file(m_path);
+    QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
         return;
     }
@@ -101,4 +69,42 @@ void ClipboardHistoryStore::rewriteFromNewestFirst(const QStringList& itemsNewes
         }
         out << kStart << QLatin1Char('\n') << t << QLatin1Char('\n') << kEnd << QLatin1Char('\n');
     }
+}
+
+} // namespace
+
+QString ClipboardHistoryStore::defaultHistoryPath()
+{
+    const QString base =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    const QString dir = base + QStringLiteral("/clipboardmonitor");
+    QDir().mkpath(dir);
+    return dir + QStringLiteral("/history.txt");
+}
+
+ClipboardHistoryStore::ClipboardHistoryStore()
+    : m_path(defaultHistoryPath())
+    , m_pinsPath(
+          QFileInfo(m_path).absoluteDir().absoluteFilePath(QStringLiteral("pins.txt")))
+{
+}
+
+QStringList ClipboardHistoryStore::loadNewestFirst() const
+{
+    return loadBlocksNewestFirstFromPath(m_path);
+}
+
+QStringList ClipboardHistoryStore::loadPinsNewestFirst() const
+{
+    return loadBlocksNewestFirstFromPath(m_pinsPath);
+}
+
+void ClipboardHistoryStore::rewriteFromNewestFirst(const QStringList& itemsNewestFirst)
+{
+    rewriteNewestFirstToPath(m_path, itemsNewestFirst);
+}
+
+void ClipboardHistoryStore::rewritePinsNewestFirst(const QStringList& itemsNewestFirst)
+{
+    rewriteNewestFirstToPath(m_pinsPath, itemsNewestFirst);
 }
